@@ -18,6 +18,7 @@ dependencies = [
   "ipykernel",
   "alpasim_grpc",
   "alpasim_utils[geometry]",
+  "alpasim_plugins",
   "omegaconf",
   "shapely",
   "trajdata-alpasim",
@@ -41,3 +42,4 @@ dependencies = [
 [tool.uv.sources]
 alpasim_grpc = {workspace = true}
 alpasim_utils = {workspace = true}
+alpasim_plugins = {workspace = true}
