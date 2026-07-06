@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2025-2026 NVIDIA Corporation
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
@@ -179,6 +179,17 @@ class EvalConfig:
     parse_unstructured_debug_info: bool = True
     # Configuration for scorers that have free parameters.
     scorers: ScorersConfig = MISSING
+    # Names of plugin scorers (registered under the ``alpasim.scorers`` entry
+    # point group) to run in addition to the built-in scorers.  ``None`` (the
+    # default) runs every registered plugin scorer; an empty list disables them
+    # all.  Plugin scorers read their own parameters from their Hydra config
+    # group, so they do not need entries in ``ScorersConfig``.
+    enabled_plugin_scorers: list[str] | None = None
+    # Free-form, per-plugin configuration for plugin scorers, keyed by the
+    # plugin's registered name (e.g. ``{"pdms": {...}}``).  This keeps the core
+    # ``ScorersConfig`` dataclass free of plugin-specific fields: a plugin
+    # scorer reads and validates its own sub-mapping from here.
+    plugin_scorer_configs: dict[str, Any] = field(default_factory=dict)
     aggregation_modifiers: MetricAggregationModifiersConfig = MISSING
     scene_score: SceneScoreConfig = MISSING
     # Number of processes to use for parallel processing of ASL reading and
