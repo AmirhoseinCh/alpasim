@@ -38,6 +38,7 @@ all = [
 # -- Plugin extras --
 transfuser = ["alpasim_transfuser"]
 mtgs = ["alpasim-mtgs[server]"]
+pdms = ["alpasim-pdms"]
 
 [tool.uv.workspace]
 members = [
@@ -69,6 +70,7 @@ alpasim_driver = { workspace = true }
 alpasim_transfuser = { workspace = true }
 alpasim_wizard = { workspace = true }
 alpasim-mtgs = { workspace = true }
+alpasim-pdms = { workspace = true }
 trajdata-alpasim = { workspace = true }
 
 [tool.uv]
