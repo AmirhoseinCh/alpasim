@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# Thin overlay image that adds the NAVSIM/nuPlan PDM-scoring stack (nuplan-devkit
+# + navsim) and registers the ``alpasim-pdms`` eval plugin on top of an existing
+# AlpaSim image (mtgs or base).  Kept separate from the main Dockerfile so the
+# heavy nuplan stack is opt-in and iterating on it does not require rebuilding
+# the whole CUDA/torch image.
+#
+# Build (from repo root):
+#   docker build -f Dockerfile.pdms \
+#     --build-arg BASE_IMAGE=alpasim-mtgs:0.91.0 \
+#     -t alpasim-mtgs-pdms:0.91.0 .
+#
+# Design notes:
+#   * nuplan-devkit / navsim are installed with ``--no-deps``: their pinned
+#     dependency sets are ancient (numpy<2, old pandas/scipy) and would fight
+#     the modern mtgs/torch stack.  The image already carries a numpy>=2 geo
+#     stack (shapely, geopandas, scipy, pyquaternion, sqlalchemy, pandas) that
+#     the PDMS code paths reuse.
+#   * numpy is re-pinned to the image's 2.x after the leaf installs to defend
+#     against an accidental <2 downgrade from any transitive requirement.
+#   * alpasim-pdms is installed editable (``--no-deps``) so its
+#     ``alpasim.scorers`` entry point registers; its declared deps are already
+#     present in the image.
+
+ARG BASE_IMAGE=alpasim-mtgs:0.91.0
+FROM ${BASE_IMAGE}
+
+# nuplan-devkit + navsim pinned to the exact commits validated on the host venv.
+ARG NUPLAN_REF=e9241677997dd86bfc0bcd44817ab04fe631405b
+ARG NAVSIM_REF=0a380a9063d7162ec93d0f51e9990ebac585f720
+# numpy floor: keep whatever 2.x the base image already carries; never downgrade.
+ARG NUMPY_PIN=numpy>=2
+
+ENV UV_LINK_MODE=copy
+ENV UV_CACHE_DIR=/tmp/uv-cache-pdms
+ENV VENV_PY=/repo/.venv/bin/python
+
+# 1) nuplan-devkit + navsim, dependency pins ignored (see header).
+RUN --mount=type=cache,target=/tmp/uv-cache-pdms \
+    uv pip install --python "${VENV_PY}" --no-deps \
+      "nuplan-devkit @ git+https://github.com/motional/nuplan-devkit.git@${NUPLAN_REF}" \
+      "navsim @ git+https://github.com/autonomousvision/navsim.git@${NAVSIM_REF}"
+
+# 2) Leaf runtime deps used by the PDMS code paths that the base image lacks.
+#    numpy is pinned alongside them so a transitive <2 requirement cannot win.
+RUN --mount=type=cache,target=/tmp/uv-cache-pdms \
+    uv pip install --python "${VENV_PY}" \
+      "${NUMPY_PIN}" rasterio retry aioboto3
+
+# 3) Register the alpasim-pdms plugin (entry points) into the venv.  The base
+#    image predates the plugin, so its baked /repo/plugins is stale; copy the
+#    current source in.  At runtime the wizard bind-mounts the live plugins dir
+#    over /repo/plugins, so the editable install keeps tracking host source.
+COPY plugins/pdms_eval /repo/plugins/pdms_eval
+RUN --mount=type=cache,target=/tmp/uv-cache-pdms \
+    uv pip install --python "${VENV_PY}" --no-deps -e /repo/plugins/pdms_eval
+
+# 4) Fail the build if the coexistence is broken (numpy must stay 2.x and all
+#    of nuplan/navsim/alpasim_pdms must import cleanly).
+RUN "${VENV_PY}" - <<'PY'
+import numpy, nuplan, navsim, alpasim_pdms
+from importlib.metadata import entry_points
+assert numpy.__version__.startswith("2."), f"numpy downgraded to {numpy.__version__}"
+scorers = {ep.name for ep in entry_points(group="alpasim.scorers")}
+assert "pdms" in scorers, f"pdms scorer not registered; found {sorted(scorers)}"
+print("PDMS overlay OK; numpy", numpy.__version__, "| scorers:", sorted(scorers))
+PY

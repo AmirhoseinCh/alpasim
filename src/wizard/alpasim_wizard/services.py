@@ -168,6 +168,14 @@ class ContainerDefinition:
         for volume_str in service_config.volumes:
             volumes.append(VolumeMount.from_str(volume_str))
 
+        # Append any service-specific extra bind mounts injected via
+        # wizard.extra_volumes (e.g. PDMS metric caches for the runtime service).
+        # Kept separate from ServiceConfig.volumes so overlays can add mounts
+        # without redeclaring a service's full base volume list.
+        extra_volumes_map = getattr(context.cfg.wizard, "extra_volumes", None) or {}
+        for volume_str in extra_volumes_map.get(name, []) or []:
+            volumes.append(VolumeMount.from_str(volume_str))
+
         if getattr(context.cfg.wizard, "validate_mount_points", False):
             for volume in volumes:
                 if not volume.host_exists():

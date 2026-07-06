@@ -19,6 +19,7 @@
 !plugins/internal/**
 !plugins/transfuser_driver/**
 !plugins/mtgs/**
+!plugins/pdms_eval/**
 !e2e_challenge/
 !e2e_challenge/starter_kit/
 !e2e_challenge/starter_kit/**

@@ -86,6 +86,7 @@ declare -A PLUGIN_EXTRAS=(
     ["plugins/internal"]="internal"
     ["plugins/transfuser_driver"]="transfuser"
     ["plugins/mtgs"]="mtgs"
+    ["plugins/pdms_eval"]="pdms"
 )
 
 echo "Detecting available plugins..."

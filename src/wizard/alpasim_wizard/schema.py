@@ -136,6 +136,13 @@ class WizardConfig:
     # can connect to services running externally (e.g., on developer's machine).
     external_services: dict[str, list[str]] | None = None
 
+    # Extra bind mounts appended to specific services' volume lists, keyed by
+    # service name (e.g. {"runtime": ["/host/cache:/host/cache"]}).  Merged
+    # additively on top of a service's base ``volumes`` so overlays can inject
+    # mounts (e.g. NAVSIM metric caches / maps for the PDMS scorer) without
+    # having to redeclare the full base volume list.
+    extra_volumes: dict[str, list[str]] = field(default_factory=dict)
+
 
 @dataclass
 class ServicesConfig:

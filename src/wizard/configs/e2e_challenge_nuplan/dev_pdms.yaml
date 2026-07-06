@@ -1,0 +1,74 @@
+# @package _global_
+# NuPlan/MTGS challenge dev preset WITH in-container PDMS scoring.
+#
+# Identical to `e2e_challenge_nuplan/dev` but additionally:
+#   * enables the plugin-registered `pdms` scorer (via `- /pdms: navtest`),
+#   * bind-mounts the NAVSIM metric caches, nuPlan maps, and scene->cache
+#     manifest into the *runtime* container (where the eval scorers execute),
+#   * points the scorer at those in-container paths.
+#
+# Requires an image that carries the nuplan/navsim stack + alpasim-pdms plugin.
+# Either rebuild the main image (the top-level Dockerfile now installs
+# `--extra pdms` + nuplan/navsim), or build the thin overlay on top of an
+# existing image and select it explicitly:
+#
+#   docker build -f Dockerfile.pdms --build-arg BASE_IMAGE=alpasim-mtgs:0.91.0 \
+#       -t alpasim-mtgs-pdms:0.91.0 .
+#
+# Numbers are NOT comparable to the NAVSIM leaderboard (reactive closed-loop
+# sim, no traffic lights); see plugins/pdms_eval/README.md.
+#
+# Example:
+#   ALPASIM_DRIVER_HOST=localhost ALPASIM_DRIVER_PORT=6789 \
+#   ALPASIM_NUPLAN_ROOT=<worldengine_root> \
+#   ALPASIM_PDMS_METRIC_CACHE_DIR=/data/sungyeonpark/nuplan/metric_cache \
+#   ALPASIM_NUPLAN_MAP_ROOT=/data/sungyeonpark/nuplan/maps \
+#   ALPASIM_PDMS_MANIFEST=/data/achahe/alpasim/pdms/pdms_manifest.json \
+#   uv run alpasim_wizard +e2e_challenge_nuplan=dev_pdms \
+#     ++defines.base_image=alpasim-mtgs-pdms:0.91.0 \
+#     wizard.log_dir=./runs/e2e_challenge_nuplan_dev_pdms
+
+defaults:
+  - /e2e_challenge_nuplan_common: base
+  - /nuplan_scenes: navtest_dev
+  - /pdms: navtest
+  - override /deploy: local
+  - override /topology: 1gpu
+  - override /driver_source: external_static
+  - _self_
+
+defines:
+  # Host paths for the NAVSIM PDM-scoring inputs.  Mounted into the runtime
+  # container at the same path so the manifest's absolute cache paths resolve.
+  pdms_metric_cache_dir: ${oc.env:ALPASIM_PDMS_METRIC_CACHE_DIR}
+  pdms_map_root: ${oc.env:ALPASIM_NUPLAN_MAP_ROOT}
+  pdms_manifest: ${oc.env:ALPASIM_PDMS_MANIFEST}
+
+wizard:
+  run_name: "e2e_challenge_nuplan_dev_pdms"
+  log_dir: "./runs/e2e_challenge_nuplan_dev_pdms"
+  description: "NuPlan MTGS challenge dev smoke test + in-container PDMS scoring"
+
+  # Inject the PDMS inputs into the runtime container's volume list (additive;
+  # the base runtime volumes from e2e_challenge_nuplan_common/base are kept).
+  extra_volumes:
+    runtime:
+      - "${defines.pdms_metric_cache_dir}:${defines.pdms_metric_cache_dir}"
+      - "${defines.pdms_map_root}:${defines.pdms_map_root}"
+      - "${defines.pdms_manifest}:${defines.pdms_manifest}"
+
+scenes:
+  limit_to_first_n: 1
+
+eval:
+  video:
+    render_video: true
+
+  plugin_scorer_configs:
+    pdms:
+      # Resolve scenes via the explicit manifest (absolute cache paths).
+      manifest_path: ${defines.pdms_manifest}
+      nuplan_map_root: ${defines.pdms_map_root}
+      # Per-scene city for the map API comes from the nuplan-track configs,
+      # which already live under the mounted worldengine root.
+      nuplan_configs_root: ${defines.worldengine_root}/navtest/configs
