@@ -75,6 +75,11 @@ class PDMObservation:
         # lazy loaded (during update)
         self._occupancy_maps: Optional[List[PDMOccupancyMap]] = None
         self._object_manager: Optional[PDMObjectManager] = None
+        # Traffic-light occupancy maps; ``None`` means "no traffic-light data"
+        # (Alpasim has no traffic-light channel).  ``update_detections_tracks``
+        # reads this when ``compute_traffic_light_data`` is False, so it must be
+        # initialised here.
+        self._occupancy_maps_tl: Optional[List[Any]] = None
 
         self._initialized: bool = False
 

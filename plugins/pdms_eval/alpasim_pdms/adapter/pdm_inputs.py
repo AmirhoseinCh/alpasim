@@ -253,7 +253,9 @@ def build_inputs_from_cache(
     drivable_area_map = _cache_attr(metric_cache, "drivable_area_map")
     route_lane_dict = _route_lane_dict_from_cache(metric_cache)
 
-    map_api = _resolve_map_api(metric_cache, config)
+    map_api = _resolve_map_api(
+        metric_cache, config, sim_result.session_metadata.scene_id
+    )
 
     return PDMScoreInputs(
         states=states,
@@ -367,8 +369,41 @@ def _route_lane_dict_from_cache(metric_cache: Any) -> dict:
     return {}
 
 
-def _resolve_map_api(metric_cache: Any, config: PDMSConfig) -> Any:
-    """Return a nuPlan ``map_api`` from the cache or ``nuplan_map_root``."""
+def _map_location_from_configs(
+    nuplan_configs_root: str, scene_id: str
+) -> str | None:
+    """Read the ``city`` (nuPlan map location) for ``scene_id`` from the
+    nuplan-track per-scene config ``<nuplan_configs_root>/<scene_id>.yaml``."""
+    import os
+    import re
+
+    path = os.path.join(nuplan_configs_root, f"{scene_id}.yaml")
+    if not os.path.isfile(path):
+        return None
+    # The config is a ``!!python/object`` YAML; avoid full unsafe load and just
+    # scan for the ``city:`` field (a plain scalar).
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                m = re.match(r"\s*city:\s*(\S+)", line)
+                if m:
+                    return m.group(1).strip().strip("'\"")
+    except OSError:
+        return None
+    return None
+
+
+def _resolve_map_api(
+    metric_cache: Any, config: PDMSConfig, scene_id: str | None = None
+) -> Any:
+    """Return a nuPlan ``map_api`` from the cache or ``nuplan_map_root``.
+
+    Map-location resolution order: (1) a ``map_api`` carried by the cache;
+    (2) a map-name/location attribute on the cache; (3) ``config.map_location``;
+    (4) the ``city`` field of the nuplan-track per-scene config under
+    ``config.nuplan_configs_root``.  A location from (2)-(4) is turned into a
+    ``map_api`` via ``nuplan_map_root``.
+    """
     for name in ("map_api", "_map_api"):
         api = getattr(metric_cache, name, None)
         if api is not None:
@@ -378,10 +413,17 @@ def _resolve_map_api(metric_cache: Any, config: PDMSConfig) -> Any:
         map_location = getattr(metric_cache, name, None)
         if map_location:
             break
+    if not map_location:
+        map_location = config.map_location
+    if not map_location and config.nuplan_configs_root and scene_id:
+        map_location = _map_location_from_configs(
+            config.nuplan_configs_root, scene_id
+        )
     if config.nuplan_map_root and map_location:
         return load_map_api(config.nuplan_map_root, str(map_location))
     raise PDMDependencyError(
-        "No map_api available: the metric cache carries no map and "
-        "pdms.nuplan_map_root / cache map_name are unset. The TTC metric "
-        "requires a nuPlan map."
+        "No map_api available: could not resolve a nuPlan map location for "
+        f"scene {scene_id!r}. Set pdms.nuplan_map_root and one of "
+        "pdms.map_location / pdms.nuplan_configs_root (or use a cache that "
+        "carries a map). The TTC metric requires a nuPlan map."
     )

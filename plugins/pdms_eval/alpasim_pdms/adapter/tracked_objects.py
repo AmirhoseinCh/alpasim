@@ -99,7 +99,13 @@ def extract_actor_boxes(
         if not in_range.any():
             continue
 
-        interp = renderable.interpolate(grid_us)
+        # Interpolate only at the grid timestamps within the actor's own time
+        # range; the underlying trajectory interpolator rejects out-of-range
+        # timestamps, so interpolating the full grid would raise for actors that
+        # do not span it.
+        in_range_idx = np.nonzero(in_range)[0]
+        grid_in_range = grid_us[in_range_idx]
+        interp = renderable.interpolate(grid_in_range)
         positions_xy = np.asarray(interp.positions, dtype=np.float64)[:, :2]
         headings = np.asarray(interp.yaws, dtype=np.float64)
         positions_xy, headings = transform.apply_poses(positions_xy, headings)
@@ -109,16 +115,14 @@ def extract_actor_boxes(
         width = float(raabb.size_y) if raabb is not None else 2.0
         category = label_by_id.get(actor_id, DEFAULT_CATEGORY)
 
-        for i, present in enumerate(in_range):
-            if not present:
-                continue
+        for j, i in enumerate(in_range_idx):
             frames[i].append(
                 ActorBox(
                     token=actor_id,
                     timestamp_us=int(grid_us[i]),
-                    x=float(positions_xy[i, 0]),
-                    y=float(positions_xy[i, 1]),
-                    heading=float(headings[i]),
+                    x=float(positions_xy[j, 0]),
+                    y=float(positions_xy[j, 1]),
+                    heading=float(headings[j]),
                     length=length,
                     width=width,
                     category=category,
@@ -153,6 +157,15 @@ def boxes_to_detections_tracks(
     from nuplan.common.actor_state.tracked_objects_types import TrackedObjectType
     from nuplan.planning.simulation.observation.observation_type import DetectionsTracks
 
+    # ``DetectionsTracks`` gained an optional ``_time_point`` field in newer
+    # nuplan/navsim; older nuplan-devkit (e.g. 1.2.2) only accepts
+    # ``tracked_objects``.  Detect which is available so we work with both.
+    import dataclasses as _dc
+
+    _dt_has_time_point = any(
+        f.name == "_time_point" for f in _dc.fields(DetectionsTracks)
+    )
+
     detections: list[Any] = []
     for frame_boxes, ts_us in zip(frames, timestamps_us):
         tracked = []
@@ -181,7 +194,11 @@ def boxes_to_detections_tracks(
         detections.append(
             DetectionsTracks(
                 tracked_objects=TrackedObjects(tracked),
-                _time_point=TimePoint(int(ts_us)),
+                **(
+                    {"_time_point": TimePoint(int(ts_us))}
+                    if _dt_has_time_point
+                    else {}
+                ),
             )
         )
     return detections

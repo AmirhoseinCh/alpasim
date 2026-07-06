@@ -138,12 +138,26 @@ def _find_cache_file(token_dir: Path) -> Path | None:
 
 
 def _load_pickle_maybe_gzip(path: Path) -> Any:
-    """Load a pickle that may or may not be gzip-compressed."""
-    with open(path, "rb") as fh:
-        head = fh.read(2)
-    opener = gzip.open if head == b"\x1f\x8b" else open
-    with opener(path, "rb") as fh:  # type: ignore[operator]
-        return pickle.load(fh)
+    """Load a pickle that may be raw or gzip / xz(lzma) / zstd compressed.
+
+    nuPlan-devkit ``run_metric_caching`` writes the per-token ``metric_cache.pkl``
+    as an **LZMA/xz**-compressed pickle, so gzip-only sniffing is insufficient.
+    We detect the container by magic bytes and decompress accordingly.
+    """
+    raw = path.read_bytes()
+    if raw[:2] == b"\x1f\x8b":  # gzip
+        data = gzip.decompress(raw)
+    elif raw[:6] == b"\xfd7zXZ\x00" or raw[:1] == b"\xfd":  # xz / lzma
+        import lzma
+
+        data = lzma.decompress(raw)
+    elif raw[:4] == b"\x28\xb5\x2f\xfd":  # zstd
+        import zstandard  # type: ignore[import-untyped]
+
+        data = zstandard.ZstdDecompressor().decompress(raw)
+    else:  # assume raw pickle
+        data = raw
+    return pickle.loads(data)
 
 
 @functools.lru_cache(maxsize=256)

@@ -115,6 +115,14 @@ class PDMSConfig:
     # nuPlan maps root, used only for the non-cache fallback path.
     nuplan_map_root: str | None = None
     map_radius_m: float = 100.0
+    # Directory of nuplan-track per-scene configs (``<scene_id>.yaml`` carrying a
+    # ``city`` field).  Used to resolve the nuPlan map location (city) for the
+    # TTC test when the metric cache does not carry one (navtest path).
+    nuplan_configs_root: str | None = None
+    # Explicit nuPlan map location (city) override; takes precedence over the
+    # per-scene config lookup.  navtest spans four cities, so per-scene lookup
+    # is preferred; this is mainly for single-city runs / debugging.
+    map_location: str | None = None
 
     # -- Output ---------------------------------------------------------------
     # Prefix for emitted metric names, e.g. ``pdms/score``.
