@@ -1,0 +1,57 @@
+# @package _global_
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# PDMS scoring overlay for the navtest split (NAVSIM metric-cache path).
+#
+# Compose it onto a run with Hydra, e.g.:
+#
+#   uv run alpasim-eval ... +pdms=navtest \
+#       +eval.plugin_scorer_configs.pdms.metric_cache_dir=/data/navtest/metric_cache \
+#       +eval.plugin_scorer_configs.pdms.nuplan_map_root=/data/nuplan/maps
+#
+# It enables the plugin-registered ``pdms`` scorer and points it at the
+# precomputed NAVSIM metric caches.  Numbers are NOT comparable to the NAVSIM
+# leaderboard (reactive closed-loop sim, no traffic lights; see the plugin
+# README) — they are for relative policy comparison on navtest scenes.
+eval:
+  # Run only the pdms plugin scorer in addition to the built-ins.  Set to
+  # ``null`` to run every registered plugin scorer instead.
+  enabled_plugin_scorers: ["pdms"]
+
+  plugin_scorer_configs:
+    pdms:
+      enabled: true
+
+      # -- Scene -> NAVSIM metric-cache resolution --------------------------
+      # Directory laid out as <metric_cache_dir>/<token>/metric_cache.pkl
+      # (navsim run_metric_caching.py default).  The Alpasim scene_id is used
+      # directly as the token.  Override on the CLI for your data location.
+      metric_cache_dir: ${oc.env:ALPASIM_PDMS_METRIC_CACHE_DIR,null}
+      # Optional explicit scene_id -> cache file JSON manifest (takes
+      # precedence over the by-token directory lookup).
+      manifest_path: null
+      # nuPlan maps root (maps-only download); used for the TTC intersection
+      # test.  Falls back to the map carried by the cache when present.
+      nuplan_map_root: ${oc.env:ALPASIM_NUPLAN_MAP_ROOT,null}
+
+      # -- Scoring references / sources ------------------------------------
+      # metric_cache = canonical NAVSIM EP (PDM-closed reference), falling back
+      # to gt when a token-aligned cache lacks the reference trajectory.
+      progress_reference: metric_cache
+      ego_trajectory_source: driven
+      mode: full_rollout
+      metric: epdms
+      human_penalty_filter: true
+
+      # -- Sampling / windowing (NAVSIM default: 4 s @ 10 Hz) --------------
+      proposal_sampling_num_poses: 40
+      proposal_sampling_interval_s: 0.1
+      resample_hz: 10.0
+      window_s: 4.0
+
+      # -- Anchor / map ----------------------------------------------------
+      anchor_tolerance_m: 1.0
+      map_radius_m: 100.0
+
+      metric_prefix: pdms

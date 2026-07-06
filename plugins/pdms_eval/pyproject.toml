@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alpasim-pdms"
+version = "0.1.0"
+description = "NAVSIM-style PDM scoring (PDMS/EPDMS) for Alpasim rollouts, as an eval plugin."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "alpasim_plugins",
+    "alpasim_eval",
+    "alpasim_utils",
+    "numpy",
+    "shapely",
+    "omegaconf",
+]
+
+# The nuplan/navsim stack is heavy and its pinned dependencies conflict with
+# modern stacks, so it is intentionally kept out of the default dependency set
+# (see plugins/pdms_eval/README.md, "Installing the nuplan stack").  Without it,
+# the plugin still registers and its pure-python adapter helpers are usable; the
+# scorer degrades to a no-op (logging a warning) when the stack is missing.
+[project.optional-dependencies]
+nuplan = [
+    "nuplan-devkit",
+    "navsim",
+]
+
+# Register the scorer under the ``alpasim.scorers`` entry-point group so that
+# eval's ``create_scorer_group`` picks it up automatically.
+[project.entry-points."alpasim.scorers"]
+pdms = "alpasim_pdms.scorer:PDMSScorer"
+
+# Ship the Hydra config overlay group (``eval/pdms.yaml``); the wizard adds
+# ``pkg://alpasim_pdms.configs`` to Hydra's search path automatically.
+[project.entry-points."alpasim.configs"]
+pdms = "alpasim_pdms.configs"
+
+# CLI tool: build the scene_id -> navsim metric-cache manifest.
+[project.entry-points."alpasim.tools"]
+pdms-manifest = "alpasim_pdms.tools.build_manifest:main"
+
+[project.scripts]
+alpasim-pdms-manifest = "alpasim_pdms.tools.build_manifest:main"
+
+[tool.setuptools.packages.find]
+include = ["alpasim_pdms*"]
+
+[tool.setuptools.package-data]
+alpasim_pdms = ["configs/**/*.yaml", "vendored/**/NOTICE", "vendored/**/*.md"]
+
+[tool.uv.sources]
+alpasim_plugins = { workspace = true }
+alpasim_eval = { workspace = true }
+alpasim_utils = { workspace = true }
