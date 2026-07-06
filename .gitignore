@@ -11,6 +11,9 @@ __pycache__/
 .mypy_cache/
 .wizard*/
 
+# nohup / stray run logs
+nohup.out
+
 # AI stuff
 .claude
 .serena
