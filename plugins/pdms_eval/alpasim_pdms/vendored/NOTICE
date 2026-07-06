@@ -1,0 +1,24 @@
+PDMS eval plugin — vendored code NOTICE
+=======================================
+
+alpasim_pdms/vendored/pdm_planner/ contains the *scoring path* of the PDM
+planner vendored from:
+
+    OpenDriveLab/WorldEngine
+    projects/SimEngine/worldengine/components/agents/policy/pdm_planner/
+    License: Apache-2.0
+
+WorldEngine's PDM scorer is itself derived from NAVSIM
+(autonomousvision/navsim) and tuplan_garage (autonomousvision/tuplan_garage),
+both Apache-2.0.  Original copyright and license notices are retained.
+
+Only the modules required to *score* already-simulated ego states are vendored
+(scorer, comfort metrics, scorer utils, observation + occupancy map, and the
+geometry/array/path/enum utilities they import).  The PDM-Closed planner, the
+LQR/kinematic simulator, IDM proposal generation and the emergency-brake logic
+are intentionally omitted.
+
+The only local modification is rewriting the intra-package import prefix
+``worldengine.components.agents.policy.pdm_planner`` to
+``alpasim_pdms.vendored.pdm_planner`` (performed by
+``alpasim_pdms/tools/vendor_pdm.py``).  Re-run that script to refresh the subtree.
